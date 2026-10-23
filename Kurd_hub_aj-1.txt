@@ -1,0 +1,176 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+if CoreGui:FindFirstChild("KurdHub") then
+    CoreGui.KurdHub:Destroy()
+end
+local gui = Instance.new("ScreenGui")
+gui.Name = "KurdHub"
+gui.ResetOnSpawn = false
+gui.Parent = CoreGui
+local main = Instance.new("Frame")
+main.Size = UDim2.fromScale(0.28, 0.36)
+main.Position = UDim2.fromScale(0.36, 0.32)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+main.Active = true
+main.Draggable = true
+main.Parent = gui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = main
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "KURD HUB AUTO"
+title.Font = Enum.Font.GothamBold
+title.TextScaled = true
+title.TextColor3 = Color3.fromRGB(255, 0, 0)
+title.Parent = main
+RunService.Heartbeat:Connect(function()
+    local h = (tick() * 50) % 360
+    title.TextColor3 = Color3.fromHSV(h / 360, 1, 1)
+end)
+local status = Instance.new("TextLabel")
+status.Position = UDim2.new(0.05, 0, 0, 50)
+status.Size = UDim2.new(0.9, 0, 0, 30)
+status.BackgroundTransparency = 1
+status.Text = "Status: GUI Loaded!"
+status.TextScaled = true
+status.Font = Enum.Font.Gotham
+status.TextColor3 = Color3.fromRGB(255, 220, 120)
+status.Parent = main
+local jobLabel = Instance.new("TextLabel")
+jobLabel.Position = UDim2.new(0.05, 0, 0, 85)
+jobLabel.Size = UDim2.new(0.9, 0, 0, 30)
+jobLabel.BackgroundTransparency = 1
+jobLabel.TextScaled = true
+jobLabel.Font = Enum.Font.Gotham
+jobLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+jobLabel.Text = "Last JobId: ---"
+jobLabel.Parent = main
+local holder = Instance.new("Frame")
+holder.Position = UDim2.new(0, 0, 0, 120)
+holder.Size = UDim2.new(1, 0, 1, -120)
+holder.BackgroundTransparency = 1
+holder.Parent = main
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.Parent = holder
+local PlaceId = 109983668079237
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1452980356624941158/5zWtp5RnudhTIisPPfjVBAw1iE80ikWT6vLK8LtzP8nCRkVQYYrL6solJ2cqv73bWFT-"
+local task = task
+local lastJobId = "---"
+local sentJobIds = {}
+local autoSend = false
+local autoRunning = false
+local function sendWebhook(jobId)
+    if sentJobIds[jobId] then return end
+    sentJobIds[jobId] = true
+    lastJobId = jobId
+    jobLabel.Text = "Last JobId: " .. jobId
+    status.Text = "Status: Sending JobId..."
+    pcall(function()
+        -- Check if request function exists
+        if typeof(request) == "function" then
+            request({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({
+                    content = "@here",
+                    embeds = {{
+                        title = "Kurd Hub Server Found",
+                        description = "## Job Id:\n```" .. jobId .. "```",
+                        color = 0xAA82FF
+                    }}
+                })
+            })
+        end
+    end)
+    status.Text = "Status: Sent JobId " .. jobId
+end
+local function findRandomServer()
+    local cursor = ""
+    local servers = {}
+    repeat
+        local url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+        if cursor ~= "" then 
+            url = url .. "&cursor=" .. cursor 
+        end
+        local ok, res = pcall(function()
+            local response = game:HttpGet(url)
+            return HttpService:JSONDecode(response)
+        end)
+        if ok and res and res.data then
+            for _, s in pairs(res.data) do
+                if s.playing < s.maxPlayers and not sentJobIds[s.id] then
+                    table.insert(servers, s.id)
+                end
+            end
+            cursor = res.nextPageCursor or ""
+        else 
+            break 
+        end
+    until cursor == "" or #servers >= 10
+    if #servers > 0 then
+        local jobId = servers[math.random(1, #servers)]
+        sendWebhook(jobId)
+    else
+        status.Text = "Status: No servers found"
+    end
+end
+spawn(function()
+    while true do
+        task.wait(1)
+        if autoSend and not autoRunning then
+            autoRunning = true
+            status.Text = "Status: Searching servers..."
+            findRandomServer()
+            task.wait(5)
+            autoRunning = false
+        end
+    end
+end)
+local function createButton(txt, fn)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(0.9, 0, 0, 36)
+    b.Text = txt
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 16
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
+    b.BorderSizePixel = 0
+    b.Parent = holder
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 10)
+    buttonCorner.Parent = b
+    b.MouseButton1Click:Connect(fn)
+end
+createButton("Start Auto Find", function() 
+    autoSend = true 
+    status.Text = "Status: Auto Find ON" 
+end)
+createButton("Stop Auto Find", function() 
+    autoSend = false 
+    status.Text = "Status: Auto Find OFF" 
+end)
+createButton("Copy Last JobId", function()
+    if typeof(setclipboard) == "function" and lastJobId ~= "---" then
+        setclipboard(lastJobId)
+        status.Text = "Status: JobId copied!"
+    else
+        status.Text = "Status: No JobId to copy!"
+    end
+end)
+createButton("Close GUI", function()
+    gui:Destroy()
+end)
+pcall(function()
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "Kurd Hub",
+        Text = "CoreGui Loaded Successfully",
+        Duration = 4
+    })
+end)
